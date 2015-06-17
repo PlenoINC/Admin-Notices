@@ -6,7 +6,7 @@
 * Author: Michael Fitzpatrick-Ruth (alpha1beta)
 * Author URI: https://github.com/WP-Hacks/Admin-Notices
 * Text Domain: wphacks
-* License: GPL v3 or later
+* License: GPL v2 or later
 */
 /*
 TODO: Remove old metadata based notice types
@@ -21,6 +21,7 @@ TODO: Support Font Awesome, if installed
 TODO: Add/Update Plugin Links
 
 Limitation: Title and Message only allow a,i,b,img, and br
+Limitation: Notices are not actually dismissible
 
 */
 if ( ! function_exists('register_wphacks_admin_notices') ) {
