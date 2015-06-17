@@ -4,9 +4,9 @@
 * Version: 0.1.0b
 * Description: Create Admin Notices in the dashboard. Great for friendly reminders to editors and authors. 
 * Author: Michael Fitzpatrick-Ruth (alpha1beta)
-* Author URI: wphacks.org
+* Author URI: https://github.com/WP-Hacks/Admin-Notices
 * Text Domain: wphacks
-* License: GPL v2 or later
+* License: GPL v3 or later
 */
 /*
 TODO: Remove old metadata based notice types
@@ -18,6 +18,9 @@ TODO: Conditions
 TODO: Multiple Hooks?
 TODO: network support
 TODO: Support Font Awesome, if installed
+TODO: Add/Update Plugin Links
+
+Limitation: Title and Message only allow a,i,b,img, and br
 
 */
 if ( ! function_exists('register_wphacks_admin_notices') ) {
@@ -479,7 +482,7 @@ function wphacks_admin_notices_conditionally_add_deactivate_action($actions, $po
 
 add_filter( 'plugin_action_links_' . plugin_basename(__FILE__), 'wphacks_admin_notices_add_action_links' );
 function wphacks_admin_notices_add_action_links ( $links ) {
-$support = array('<a href="">Support</a>');
+$support = array('<a href="https://github.com/WP-Hacks/Admin-Notices/issues">Support</a>');
 return array_merge( $links, $support);
 }
 
@@ -487,7 +490,7 @@ add_filter('plugin_row_meta','wphacks_admin_notices_plugin_row_meta',10,4);
 function wphacks_admin_notices_plugin_row_meta($plugin_meta, $plugin_file, $plugin_data, $status ){
 	if($plugin_file == plugin_basename(__FILE__)){
 		$release_notes = array('<a href="">Release Notes</a>');
-		$source = array('<a href="">Source</a>');
+		$source = array('<a href="https://github.com/WP-Hacks/Admin-Notices">Source</a>');
 		return array_merge($plugin_meta,$release_notes,$source);
 	} 
 	return $plugin_meta;
