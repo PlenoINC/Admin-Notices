@@ -1,24 +1,40 @@
 <?php
 /*
 * Plugin Name: Admin Notices (WP Hacks)
-* Version: 0.1.0b
-* Description: Create Admin Notices in the dashboard. Great for friendly reminders to editors and authors. 
-* Author: Michael Fitzpatrick-Ruth (alpha1beta)
+* Version: 0.1.3
+* Description: Create Admin Notices in the dashboard. Great for friendly reminders to editors and authors. Shortcode friendly. 
+* Author: wphacks
 * Author URI: https://github.com/WP-Hacks/Admin-Notices
 * Text Domain: wphacks
 * License: GPL v2 or later
 */
+
 /*
+### Changelog
+
+=== 0.1.3 ==
+- Dismissible notices are stored by user id in post meta '_wphacks_notice_dismissed_by_user_id';
+
+
+=== 0.1.2 ==
+- Added support for shortcodes in notice title and message
+*/
+
+/*
+WIP: Conditions
 TODO: Remove old metadata based notice types
 TODO: remove preview button
 TODO: add custom type colors
 TODO: Add Default Colors for Message and User Error
-TODO: Add System for Dismissible messages (per user closing)
-TODO: Conditions
 TODO: Multiple Hooks?
 TODO: network support
 TODO: Support Font Awesome, if installed
 TODO: Add/Update Plugin Links
+TODO: Better Description
+TODO: Screenshots
+TODO: Documentation
+TODO: Support browsers that don't support type="color"
+TODO: Option placement above metaboxes or other hooks
 
 Limitation: Title and Message only allow a,i,b,img, and br
 Limitation: Notices are not actually dismissible
@@ -109,11 +125,16 @@ function register_wphacks_notice_types() {
 	register_taxonomy( 'wphacks_admin_notice_types', array( 'wph_adm_notices' ), $args );
 
 }
-
 // Hook into the 'init' action
 add_action( 'init', 'register_wphacks_notice_types', 0 );
-
 }
+
+add_action('admin_enqueue_scripts','wphacks_enqueue_admin_notices_js');
+function wphacks_enqueue_admin_notices_js(){
+	wp_enqueue_script('wphacks-admin-notices',plugins_url('/assets/js/wphacks-admin-notices.js',__FILE__),'jquery','',true);
+}
+
+
 
 register_activation_hook(__FILE__, 'wphacks_hook_in_default_admin_types' );
 function wphacks_hook_in_default_admin_types(){
@@ -141,6 +162,7 @@ register_meta('post','_notice_icon','wphacks_sanitize_notice_icon','wphacks_can_
 register_meta('post','_notice_icon_color','wphacks_sanitize_notice_icon_color','wphacks_can_edit_admin_notice');
 register_meta('post','_notice_is_dismissible','wphacks_sanitize_notice_is_dismissible','wphacks_can_edit_admin_notice');
 register_meta('post','_notice_importance','wphacks_sanitize_notice_importance','wphacks_can_edit_admin_notice');
+register_meta('post','_wphacks_notice_dismissed_by_user_id','wphacks_sanitize_notice_user_id','wphacks_can_edit_admin_notice');
 
 function wphacks_sanitize_notice_type($input){
 	//TODO make this work
@@ -158,6 +180,11 @@ function wphacks_sanitize_notice_icon_color($input){
 function wphacks_sanitize_notice_importance($input){
 	return intval($input);
 }
+
+function wphacks_sanitize_notice_user_id($input){
+	return intval($input);
+}
+
 function wphacks_can_edit_admin_notice(){
 	global $post;
 	if(!current_user_can('edit_post', $post->ID)){
@@ -228,6 +255,11 @@ function wphacks_register_metabox_new_admin_notice(){
 	add_meta_box('wphacks_admin_notice','Notice Details','wphacks_render_metabox_new_admin_notice','wph_adm_notices','normal','high','');
 }
 
+add_action('add_meta_boxes','wphacks_register_metabox_dismissed_by_users');
+function wphacks_register_metabox_dismissed_by_users(){
+	add_meta_box('wphacks_admin_notice_dismissed_by_users','Dismissed By Users','wphacks_render_metabox_dismissed_by_users','wph_adm_notices','normal','low','');
+}
+
 function wphacks_get_admin_notice_types(){
 return apply_filters("wphacks_admin_notice_types",$notice_types = array(
 		'update'=>'Update',
@@ -235,6 +267,11 @@ return apply_filters("wphacks_admin_notice_types",$notice_types = array(
 		'update-nag'=>'Update (Nag)',
 		'message'=>'message',
 	));
+}
+
+function wphacks_render_metabox_dismissed_by_users(){
+	global $post;
+	print_r(get_post_meta($post->ID, '_wphacks_notice_dismissed_by_user_id', false));
 }
 
 function wphacks_render_metabox_new_admin_notice(){
@@ -302,15 +339,64 @@ function wphacks_render_metabox_new_admin_notice(){
 	<p><input type="text" name="post_content" class="widefat" placeholder="Message (Required)" value="<?php echo $post->post_content; ?>"></p>
 		
 	<label>Conditions</label>
-	<p class="controls"><a href="" class="dashicons dashicons-plus-alt" title="Add Condition for displaying this notice"></a></a>
-	<p class="repeatable draggable"><a href="" title="Remove this Condition" class="dashicons dashicons-dismiss delete"></a> Conditions Go Here</p>
-	<template id="wphacks-admin-notice-condition">
+	<div class="wphacks-admin-notices-conditions">
+	<p class="controls"><a href="" class="dashicons dashicons-plus-alt wphacks-admin-notices-add-condition" title="Add Condition for displaying this notice"></a></a>
+
+
+	<p class="repeatable draggable"><a href="" title="Remove this Condition" class="dashicons dashicons-dismiss delete wphacks-admin-notices-delete-condition"></a>
+	<div class="condition-selector-">
+	<select name="selector[]">
+	<?php
+		$selectors = wphacks_get_selectors();
+		foreach($selectors as $value=>$name){
+			if(selected($value,"x")){
+				echo '<option selected="selected" value="'. $value .'">'. $name .'</option>';
+			} elseif(empty($value)){
+				echo '<option disabled value="'. $value .'">'. $name .'</option>';
+			} else {
+				echo '<option value="'. $value .'">'. $name .'</option>';
+			}
+		}
+	?>
+	</select>
+	</div>
+	<div class="condition-operator-"></div>
+	<div class="condition-value-"></div>
+	</p>
+	</div>
+
+	<template id="wphacks-admin-notice-condition-template">
 		<p class="repeatable draggable">
 		<a href="" title="Remove this Condition" class="dashicons dashicons-dismiss delete"></a>
-		
+			<select name="selector[]">
+			<?php
+			$selectors = wphacks_get_selectors();
+				foreach($selectors as $value=>$name){
+					if(selected($value,"x")){
+						echo '<option selected="selected" value="'. $value .'">'. $name .'</option>';
+					} else {
+						 echo '<option value="'. $value .'">'. $name .'</option>';
+					}
+				}
+			?>
+			</select>
 		</p>
 	</template>
 	<?php
+}
+
+function wphacks_get_selectors(){
+	 return $selectors = array(
+		'' => '--Select One--',
+		'post_status' => 'Post Status',
+		'post_type' => 'Post type',
+		'id' => 'Post ID',
+		'current_user' => 'User',
+		'author' => 'Author',
+		'cat' => 'Category',
+		//'' => '',
+		//'' => '',
+	);
 }
 
 //add_action('network_admin_notice','wphacks_do_admin_notice_network');
@@ -394,31 +480,35 @@ function wphacks_admin_notices($admin_notice_hook = ""){
 }
 
 
-function wphacks_admin_notice($message, $type = "updated", $title = "",$icon ="", $icon_color = "", $notice_is_dismissible = 0, $post = null, $action = ""){
-	$type = apply_filters('wphacks_notice_type',$type);
+function wphacks_admin_notice( $message, $type = "updated", $title = "",$icon ="", $icon_color = "", $notice_is_dismissible = 0, $post = null, $action = "" ){
+	$type = apply_filters( 'wphacks_notice_type', $type );
 	if(!in_array($type,wphacks_get_admin_notice_types())){
 		//check if term exists
 		//return false;
 	}
+	if(	in_array( get_current_user_id(), get_post_meta( $post->ID, '_wphacks_notice_dismissed_by_user_id', false))){
+		return;
+	}
 	$type = esc_attr($type);
-	$title = __(do_shortcode(apply_filters('wphacks_notice_title',$title),"wphacks"));
-	$message = __(do_shortcode(apply_filters('wphacks_notice_message',$message)),"wphacks");
-	$icon = esc_attr(apply_filters('wphacks_notice_icon',$icon));
-	$icon_color = esc_attr(apply_filters('wphacks_notice_icon_color',$icon_color));
+	$title = __( do_shortcode( apply_filters( 'wphacks_notice_title', $title ),"wphacks") );
+	$message = __( do_shortcode( apply_filters( 'wphacks_notice_message',$message ) ), "wphacks" );
+	$icon = esc_attr( apply_filters( 'wphacks_notice_icon',$icon ) );
+	$icon_color = esc_attr( apply_filters( 'wphacks_notice_icon_color', $icon_color ) );
 	
-	$notice_is_dismissible = apply_filters('wphacks_notice_icon_color',$notice_is_dismissible);
+	$notice_is_dismissible = apply_filters( 'wphacks_notice_icon_color', $notice_is_dismissible );
 	$class = array();
 	$class[] = $type;
 	if(!empty($notice_is_dismissible)){
 		$class[] = "notice is-dismissible";
 	}
+
 	if(!empty($action)){
 		$class[] = $action;
 	}
 	$class = 'class="' . join( ' ', get_post_class($class, $post_id ) ) . '"';
 	
 	
-	echo '<div id="post-'. esc_attr($post->ID) .'"'. $class .'><p>'. (!empty($icon) ? '<span class="dashicons '. $icon .'"'. (!empty($icon_color) ? 'style="color:'. $icon_color .';"' : '') .'></span>' : '') .'<b>'. $title .'</b> '. $message . (current_user_can('edit_post',$post->Id) ? ' <span style="text-align: right; float:right;"><a href="'. get_edit_post_link($post->ID).'" target="_blank">(edit)</a></span>' : '') .'</p></div>';
+	echo '<div data-notice-id="', esc_attr( $post->ID ) ,'" id="post-'. esc_attr( $post->ID ) .'"'. $class .'>'.(($type != "update-nag") ? '<p>' : '<span>') . (!empty($icon) ? '<span class="dashicons '. $icon .'"'. (!empty($icon_color) ? 'style="color:'. $icon_color .';"' : '') .'></span>' : '') .'<b>'. do_shortcode($title) .'</b> '. do_shortcode($message) . (current_user_can('edit_post',$post->Id) ? '&nbsp;<span style="text-align: right; float:right;"><a href="'. get_edit_post_link($post->ID).'" target="_blank">(edit)</a></span>' : '') .(($type != "update-nag") ? '</p>' : '</span>') .'</div>';
 	//TODO make this a sprintf();
 	return true;
 }
@@ -434,7 +524,7 @@ function wphacks_notice_message_strip_tags($message){
 }
 
 
-add_action('quick_edit_custom_box','wphacks_admin_notices_quick_edit');
+//add_action('quick_edit_custom_box','wphacks_admin_notices_quick_edit');
 function wphacks_admin_notices_quick_edit($column_name, $post_type){
 	if($post_type == "wph_adm_notices"){
 	
@@ -483,17 +573,51 @@ function wphacks_admin_notices_conditionally_add_deactivate_action($actions, $po
 
 add_filter( 'plugin_action_links_' . plugin_basename(__FILE__), 'wphacks_admin_notices_add_action_links' );
 function wphacks_admin_notices_add_action_links ( $links ) {
-$support = array('<a href="https://github.com/WP-Hacks/Admin-Notices/issues">Support</a>');
-return array_merge( $links, $support);
+	$support = array( '<a href="https://github.com/WP-Hacks/Admin-Notices/issues">Support</a>' );
+	return array_merge( $links, $support );
 }
 
-add_filter('plugin_row_meta','wphacks_admin_notices_plugin_row_meta',10,4);
-function wphacks_admin_notices_plugin_row_meta($plugin_meta, $plugin_file, $plugin_data, $status ){
-	if($plugin_file == plugin_basename(__FILE__)){
-		$release_notes = array('<a href="">Release Notes</a>');
-		$source = array('<a href="https://github.com/WP-Hacks/Admin-Notices">Source</a>');
-		return array_merge($plugin_meta,$release_notes,$source);
+add_filter( 'plugin_row_meta', 'wphacks_admin_notices_plugin_row_meta', 10, 4 );
+function wphacks_admin_notices_plugin_row_meta( $plugin_meta, $plugin_file, $plugin_data, $status ){
+	if( $plugin_file == plugin_basename(__FILE__) ){
+		$twitter = array( '<a target="_blank" href="https://twitter.com/wp_hacks">@wp_hacks</a>' );
+		//$release_notes = array('<a target="_blank" href="https://wphacks.org/plugin/admin-notices/releases/?ver=VERSION">Release Notes</a>');
+		//$home = array('<a target="_blank" href="https://wphacks.org/plugin/admin-notices/">Plugin Homepage</a>');
+		$source = array( '<a target="_blank" href="https://github.com/WP-Hacks/Admin-Notices">Source</a>' );
+		//return array_merge($plugin_meta,$twitter,$home, $release_notes,$source);
+		return array_merge( $plugin_meta, $twitter, $source );
 	} 
 	return $plugin_meta;
+}
+
+add_action('wp_ajax_add_post_meta','wphacks_add_meta_via_ajax');
+function wphacks_add_meta_via_ajax(){
+	$post_id = intval($_POST['post_id']);
+	$meta_key = $_POST['meta_key'];
+	$meta_value = $_POST['meta_value'];
+	$unqiue = (bool) $_POST['unique'];
+
+	wp_send_json(add_post_meta($post_id, $meta_key, $meta_value, $unqiue));
+	wp_die();
+}
+
+add_action( 'wp_ajax_wphacks_hide_dismissed_by_user', 'wphacks_admin_notice_dismissed_by_user' );
+function wphacks_admin_notice_dismissed_by_user(){
+	if( isset( $_GET['notice_id'] ) ){
+		$notice_id = intval( $_GET['notice_id'] );
+		//check if this user is already in this array - it should never happen unless the notice doesn't hide correctly, or 2 pages are open with the same notice.
+		if( in_array(get_current_user_id(), get_post_meta( $notice_id, '_wphacks_notice_dismissed_by_user_id', false) )){
+			wp_send_json_success( true );
+		} else {
+			$result = (bool) add_post_meta( $notice_id , '_wphacks_notice_dismissed_by_user_id', get_current_user_id(), false );
+			if( $result ){
+				wp_send_json_success( $result );
+			} else {
+				wp_send_json_error( $result );
+			}
+		}
+	} else {
+		wp_send_json_error();
+	}
 }
 ?>
